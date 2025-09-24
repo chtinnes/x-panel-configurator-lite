@@ -8,6 +8,8 @@ class PanelBase(BaseModel):
     model: str
     manufacturer: str = "Hager"
     total_slots: int
+    rows: int = 2
+    slots_per_row: int
     voltage: float
     current_rating: float
     description: Optional[str] = None
@@ -20,6 +22,8 @@ class PanelUpdate(BaseModel):
     model: Optional[str] = None
     manufacturer: Optional[str] = None
     total_slots: Optional[int] = None
+    rows: Optional[int] = None
+    slots_per_row: Optional[int] = None
     voltage: Optional[float] = None
     current_rating: Optional[float] = None
     description: Optional[str] = None
@@ -55,6 +59,8 @@ class DeviceType(DeviceTypeBase):
 # Panel Slot Schemas
 class PanelSlotBase(BaseModel):
     slot_number: int
+    row: int
+    column: int
     device_label: Optional[str] = None
     current_setting: Optional[float] = None
     spans_slots: int = 1

@@ -29,14 +29,20 @@ def create_panel(panel: PanelCreate, db: Session = Depends(get_db)):
     db.commit()
     db.refresh(db_panel)
     
-    # Create empty slots for the panel
-    for slot_num in range(1, panel.total_slots + 1):
-        slot = PanelSlot(
-            panel_id=db_panel.id,
-            slot_number=slot_num,
-            is_occupied=False
-        )
-        db.add(slot)
+    # Create empty slots for the panel organized by rows
+    slot_number = 1
+    for row in range(1, panel.rows + 1):
+        for col in range(1, panel.slots_per_row + 1):
+            if slot_number <= panel.total_slots:
+                slot = PanelSlot(
+                    panel_id=db_panel.id,
+                    slot_number=slot_number,
+                    row=row,
+                    column=col,
+                    is_occupied=False
+                )
+                db.add(slot)
+                slot_number += 1
     
     db.commit()
     return db_panel
@@ -75,27 +81,33 @@ def get_hager_volta_templates():
             "model": "VD112",
             "manufacturer": "Hager",
             "total_slots": 12,
+            "rows": 2,
+            "slots_per_row": 6,
             "voltage": 230.0,
             "current_rating": 63.0,
-            "description": "12-way consumer unit suitable for small to medium homes"
+            "description": "12-way consumer unit suitable for small to medium homes - 2 rows of 6 slots each"
         },
         {
             "name": "Hager Volta 18 Way",
             "model": "VD118",
             "manufacturer": "Hager", 
             "total_slots": 18,
+            "rows": 2,
+            "slots_per_row": 9,
             "voltage": 230.0,
             "current_rating": 100.0,
-            "description": "18-way consumer unit suitable for medium to large homes"
+            "description": "18-way consumer unit suitable for medium to large homes - 2 rows of 9 slots each"
         },
         {
             "name": "Hager Volta 24 Way",
             "model": "VD124",
             "manufacturer": "Hager",
             "total_slots": 24,
+            "rows": 3,
+            "slots_per_row": 8,
             "voltage": 230.0,
             "current_rating": 100.0,
-            "description": "24-way consumer unit suitable for large homes or small commercial"
+            "description": "24-way consumer unit suitable for large homes or small commercial - 3 rows of 8 slots each"
         }
     ]
     return templates

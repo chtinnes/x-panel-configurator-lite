@@ -4,6 +4,8 @@ export interface Panel {
   model: string;
   manufacturer: string;
   total_slots: number;
+  rows: number;
+  slots_per_row: number;
   voltage: number;
   current_rating: number;
   description?: string;
@@ -17,6 +19,8 @@ export interface PanelCreate {
   model: string;
   manufacturer: string;
   total_slots: number;
+  rows: number;
+  slots_per_row: number;
   voltage: number;
   current_rating: number;
   description?: string;
@@ -38,6 +42,8 @@ export interface PanelSlot {
   id: number;
   panel_id: number;
   slot_number: number;
+  row: number;
+  column: number;
   device_type_id?: number | null;
   device_label?: string;
   current_setting?: number;
@@ -92,6 +98,8 @@ export interface PanelTemplate {
   model: string;
   manufacturer: string;
   total_slots: number;
+  rows: number;
+  slots_per_row: number;
   voltage: number;
   current_rating: number;
   description?: string;

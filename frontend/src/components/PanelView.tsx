@@ -125,23 +125,33 @@ const PanelView: React.FC<PanelViewProps> = ({ panel }) => {
   const [currentSetting, setCurrentSetting] = useState('');
 
   useEffect(() => {
-    // Initialize slots from panel configuration
+    // Initialize slots from panel configuration organized by rows
     const initialSlots: PanelSlot[] = [];
-    for (let i = 1; i <= panel.total_slots; i++) {
-      initialSlots.push({
-        id: i,
-        panel_id: panel.id,
-        slot_number: i,
-        device_type_id: undefined,
-        device_label: undefined,
-        current_setting: undefined,
-        is_occupied: false,
-        spans_slots: 1,
-      });
+    let slotNumber = 1;
+    
+    for (let row = 1; row <= panel.rows; row++) {
+      for (let col = 1; col <= panel.slots_per_row; col++) {
+        if (slotNumber <= panel.total_slots) {
+          initialSlots.push({
+            id: slotNumber,
+            panel_id: panel.id,
+            slot_number: slotNumber,
+            row: row,
+            column: col,
+            device_type_id: undefined,
+            device_label: undefined,
+            current_setting: undefined,
+            is_occupied: false,
+            spans_slots: 1,
+          });
+          slotNumber++;
+        }
+      }
     }
+    
     setSlots(initialSlots);
     fetchDevices();
-  }, [panel.id, panel.total_slots]);
+  }, [panel.id, panel.total_slots, panel.rows, panel.slots_per_row]);
 
   const fetchDevices = async () => {
     try {
@@ -196,6 +206,20 @@ const PanelView: React.FC<PanelViewProps> = ({ panel }) => {
     setCurrentSetting('');
   };
 
+  // Group slots by rows for display
+  const organizeSlotsByRows = () => {
+    const rowsArray: PanelSlot[][] = [];
+    
+    for (let row = 1; row <= panel.rows; row++) {
+      const rowSlots = slots
+        .filter(slot => slot.row === row)
+        .sort((a, b) => a.column - b.column);
+      rowsArray.push(rowSlots);
+    }
+    
+    return rowsArray;
+  };
+
   if (error) {
     return <Alert severity="error">{error}</Alert>;
   }
@@ -212,6 +236,11 @@ const PanelView: React.FC<PanelViewProps> = ({ panel }) => {
             variant="outlined"
           />
           <Chip
+            label={`${panel.rows} rows × ${panel.slots_per_row} slots`}
+            variant="outlined"
+            color="primary"
+          />
+          <Chip
             label={`${panel.voltage}V`}
             variant="outlined"
           />
@@ -222,21 +251,31 @@ const PanelView: React.FC<PanelViewProps> = ({ panel }) => {
         </Box>
       </Box>
 
-      <Grid container spacing={2}>
-        {slots.map((slot) => (
-          <Grid 
-            key={slot.slot_number}
-            size={{ xs: 12, sm: 6, md: 4, lg: 3, xl: 2 }}
-          >
-            <Box onClick={() => handleSlotClick(slot)}>
-              <SlotComponent
-                slot={slot}
-                onSlotUpdate={handleSlotUpdate}
-              />
-            </Box>
-          </Grid>
+      {/* Panel Layout by Rows */}
+      <Box sx={{ border: '2px solid #ddd', borderRadius: 2, p: 2, backgroundColor: '#f9f9f9' }}>
+        {organizeSlotsByRows().map((rowSlots, rowIndex) => (
+          <Box key={rowIndex} sx={{ mb: rowIndex < panel.rows - 1 ? 2 : 0 }}>
+            <Typography variant="subtitle2" color="text.secondary" sx={{ mb: 1 }}>
+              Row {rowIndex + 1}
+            </Typography>
+            <Grid container spacing={1}>
+              {rowSlots.map((slot) => (
+                <Grid 
+                  key={slot.slot_number}
+                  size={{ xs: 12 / panel.slots_per_row }}
+                >
+                  <Box onClick={() => handleSlotClick(slot)}>
+                    <SlotComponent
+                      slot={slot}
+                      onSlotUpdate={handleSlotUpdate}
+                    />
+                  </Box>
+                </Grid>
+              ))}
+            </Grid>
+          </Box>
         ))}
-      </Grid>
+      </Box>
 
       {/* Configuration Dialog */}
       <Dialog open={configDialog.open} onClose={handleConfigCancel} maxWidth="sm" fullWidth>

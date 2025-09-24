@@ -11,6 +11,8 @@ class Panel(Base):
     model = Column(String)  # e.g., "Hager Volta"
     manufacturer = Column(String, default="Hager")
     total_slots = Column(Integer)
+    rows = Column(Integer, default=2)  # Number of rows in the panel
+    slots_per_row = Column(Integer)  # Number of slots per row
     voltage = Column(Float)  # e.g., 230V, 400V
     current_rating = Column(Float)  # e.g., 63A, 100A
     description = Column(Text, nullable=True)
@@ -42,7 +44,9 @@ class PanelSlot(Base):
     
     id = Column(Integer, primary_key=True, index=True)
     panel_id = Column(Integer, ForeignKey("panels.id"))
-    slot_number = Column(Integer)  # Position in the panel
+    slot_number = Column(Integer)  # Position in the panel (1-based)
+    row = Column(Integer)  # Row number (1-based)
+    column = Column(Integer)  # Column number within the row (1-based)
     device_type_id = Column(Integer, ForeignKey("device_types.id"), nullable=True)
     device_label = Column(String, nullable=True)  # Custom label for this instance
     current_setting = Column(Float, nullable=True)  # e.g., breaker trip current

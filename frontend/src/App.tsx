@@ -101,7 +101,7 @@ function App() {
                 {selectedPanel.name}
               </Typography>
               <Typography variant="subtitle1" gutterBottom color="text.secondary">
-                {selectedPanel.manufacturer} {selectedPanel.model} - {selectedPanel.total_slots} slots, {selectedPanel.voltage}V, {selectedPanel.current_rating}A
+                {selectedPanel.manufacturer} {selectedPanel.model} - {selectedPanel.total_slots} slots ({selectedPanel.rows} rows × {selectedPanel.slots_per_row} slots), {selectedPanel.voltage}V, {selectedPanel.current_rating}A
               </Typography>
               
               {currentView === 'panel' && <PanelView panel={selectedPanel} />}

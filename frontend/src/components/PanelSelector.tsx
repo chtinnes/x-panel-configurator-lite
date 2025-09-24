@@ -36,6 +36,8 @@ const PanelSelector: React.FC<PanelSelectorProps> = ({ onPanelSelect }) => {
     model: '',
     manufacturer: 'Hager',
     total_slots: 12,
+    rows: 2,
+    slots_per_row: 6,
     voltage: 230,
     current_rating: 63,
     description: '',
@@ -81,6 +83,8 @@ const PanelSelector: React.FC<PanelSelectorProps> = ({ onPanelSelect }) => {
         model: '',
         manufacturer: 'Hager',
         total_slots: 12,
+        rows: 2,
+        slots_per_row: 6,
         voltage: 230,
         current_rating: 63,
         description: '',
@@ -160,7 +164,7 @@ const PanelSelector: React.FC<PanelSelectorProps> = ({ onPanelSelect }) => {
             <ListItemButton onClick={() => onPanelSelect(panel)}>
               <ListItemText
                 primary={panel.name}
-                secondary={`${panel.model} - ${panel.total_slots} slots`}
+                secondary={`${panel.model} - ${panel.total_slots} slots (${panel.rows}×${panel.slots_per_row})`}
               />
             </ListItemButton>
             <ListItemSecondaryAction>
@@ -211,6 +215,44 @@ const PanelSelector: React.FC<PanelSelectorProps> = ({ onPanelSelect }) => {
               onChange={(e) => setNewPanel({ ...newPanel, total_slots: parseInt(e.target.value) })}
               fullWidth
               required
+            />
+            <TextField
+              label="Number of Rows"
+              type="number"
+              value={newPanel.rows}
+              onChange={(e) => setNewPanel({ ...newPanel, rows: parseInt(e.target.value) })}
+              fullWidth
+              required
+              inputProps={{ min: 1, max: 4 }}
+              helperText="Typically 2-3 rows for standard panels"
+            />
+            <TextField
+              label="Slots per Row"
+              type="number"
+              value={newPanel.slots_per_row}
+              onChange={(e) => setNewPanel({ ...newPanel, slots_per_row: parseInt(e.target.value) })}
+              fullWidth
+              required
+              inputProps={{ min: 1, max: 12 }}
+              helperText="Number of devices that fit in one row"
+            />
+            <TextField
+              label="Number of Rows"
+              type="number"
+              value={newPanel.rows}
+              onChange={(e) => setNewPanel({ ...newPanel, rows: parseInt(e.target.value) })}
+              fullWidth
+              required
+              helperText="How many horizontal rows of devices"
+            />
+            <TextField
+              label="Slots per Row"
+              type="number"
+              value={newPanel.slots_per_row}
+              onChange={(e) => setNewPanel({ ...newPanel, slots_per_row: parseInt(e.target.value) })}
+              fullWidth
+              required
+              helperText="How many device slots in each row"
             />
             <TextField
               label="Voltage (V)"
@@ -267,7 +309,7 @@ const PanelSelector: React.FC<PanelSelectorProps> = ({ onPanelSelect }) => {
                     secondary={
                       <Typography component="span" variant="body2">
                         {template.description}<br />
-                        {template.total_slots} slots, {template.voltage}V, {template.current_rating}A
+                        {template.total_slots} slots ({template.rows} rows × {template.slots_per_row} slots), {template.voltage}V, {template.current_rating}A
                       </Typography>
                     }
                   />

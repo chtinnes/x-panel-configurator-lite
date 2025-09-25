@@ -16,7 +16,7 @@ import {
   Alert,
 } from '@mui/material';
 import { useDrop, DropTargetMonitor } from 'react-dnd';
-import { Panel, PanelSlot, DeviceType, DeviceLibraryItem } from '../types';
+import { Panel, PanelSlot, DeviceTemplate } from '../types';
 import { deviceAPI, panelAPI } from '../services/api';
 
 interface PanelViewProps {
@@ -26,18 +26,17 @@ interface PanelViewProps {
 
 interface SlotProps {
   slot: PanelSlot;
-  onSlotUpdate: (slotNumber: number, deviceId: number | null, label?: string, currentSetting?: number, slotsRequired?: number) => void;
+  onSlotUpdate: (slotNumber: number, deviceTemplateId: number | null, label?: string, currentSetting?: number, slotsRequired?: number) => void;
 }
 
 const SlotComponent: React.FC<SlotProps> = ({ slot, onSlotUpdate }) => {
   const [{ isOver, canDrop }, drop] = useDrop({
     accept: 'device',
-    drop: async (item: DeviceLibraryItem) => {
-      // For now, use library device ID directly for validation
-      // In a real app, you'd map library devices to DeviceType IDs
+    drop: async (item: DeviceTemplate) => {
+      // Use device template ID directly
       onSlotUpdate(slot.slot_number, item.id, undefined, undefined, item.slots_required);
     },
-    canDrop: (item: DeviceLibraryItem) => {
+    canDrop: (item: DeviceTemplate) => {
       // Basic validation: single slot devices can be placed anywhere that's not occupied
       // Multi-slot devices need more complex validation
       if (slot.is_occupied) {
@@ -53,9 +52,9 @@ const SlotComponent: React.FC<SlotProps> = ({ slot, onSlotUpdate }) => {
     }),
   });
 
-  const isEmpty = !slot.device_type_id && !slot.is_occupied;
-  const isBlocked = slot.is_occupied && !slot.device_type_id; // Blocked by multi-slot device
-  const hasDevice = slot.device_type_id && slot.is_occupied;
+  const isEmpty = !slot.device_template_id && !slot.is_occupied;
+  const isBlocked = slot.is_occupied && !slot.device_template_id; // Blocked by multi-slot device
+  const hasDevice = slot.device_template_id && slot.is_occupied;
   
   return (
     <Card
@@ -63,10 +62,10 @@ const SlotComponent: React.FC<SlotProps> = ({ slot, onSlotUpdate }) => {
       sx={{
         minHeight: 120,
         backgroundColor: isEmpty 
-          ? (isOver && canDrop ? '#e3f2fd' : '#f5f5f5') 
+          ? (isOver && canDrop ? 'rgba(227, 242, 253, 0.8)' : 'rgba(245, 245, 245, 0.6)') 
           : isBlocked
-          ? '#ffebee' // Light red for blocked slots
-          : '#ffffff', // White for occupied slots
+          ? 'rgba(255, 235, 238, 0.8)' // Light red for blocked slots with transparency
+          : 'rgba(255, 255, 255, 0.85)', // Semi-transparent white for occupied slots
         border: isEmpty 
           ? (isOver && canDrop ? '2px dashed #2196f3' : '2px dashed #cccccc')
           : isBlocked
@@ -76,10 +75,39 @@ const SlotComponent: React.FC<SlotProps> = ({ slot, onSlotUpdate }) => {
           : '2px solid #cccccc',
         cursor: isEmpty ? 'pointer' : 'default',
         transition: 'all 0.2s ease',
+        borderRadius: hasDevice ? '4px' : '6px',
+        boxShadow: hasDevice 
+          ? '0 2px 8px rgba(0,0,0,0.15), inset 0 1px 2px rgba(255,255,255,0.5)' 
+          : '0 1px 3px rgba(0,0,0,0.1)',
         '&:hover': {
-          backgroundColor: isEmpty ? '#eeeeee' : isBlocked ? '#ffebee' : '#ffffff',
+          backgroundColor: isEmpty 
+            ? 'rgba(238, 238, 238, 0.7)' 
+            : isBlocked 
+            ? 'rgba(255, 235, 238, 0.9)' 
+            : 'rgba(255, 255, 255, 0.95)',
+          transform: hasDevice ? 'translateY(-1px)' : 'none',
+          boxShadow: hasDevice 
+            ? '0 4px 12px rgba(0,0,0,0.2), inset 0 1px 2px rgba(255,255,255,0.5)' 
+            : '0 2px 4px rgba(0,0,0,0.15)',
         },
-        opacity: isBlocked ? 0.7 : 1, // Make blocked slots more transparent
+        opacity: isBlocked ? 0.7 : 1,
+        // Add device mounting appearance with transparency
+        background: hasDevice 
+          ? 'linear-gradient(135deg, rgba(255,255,255,0.9) 0%, rgba(248,248,248,0.8) 50%, rgba(240,240,240,0.7) 100%)'
+          : undefined,
+        // Add mounting rail connection visual
+        position: 'relative',
+        '&::before': hasDevice ? {
+          content: '""',
+          position: 'absolute',
+          bottom: '-2px',
+          left: '10%',
+          right: '10%',
+          height: '4px',
+          backgroundColor: '#666',
+          borderRadius: '0 0 2px 2px',
+          boxShadow: 'inset 0 1px 2px rgba(0,0,0,0.3)',
+        } : {},
       }}
     >
       <CardContent sx={{ p: 1.5, '&:last-child': { pb: 1.5 } }}>
@@ -106,13 +134,52 @@ const SlotComponent: React.FC<SlotProps> = ({ slot, onSlotUpdate }) => {
               Used by multi-slot device
             </Typography>
           </Box>
-        ) : hasDevice && slot.device_type ? (
-          <Box sx={{ mt: 1 }}>
-            <Typography variant="subtitle2" component="div">
+        ) : hasDevice && slot.device_template ? (
+          <Box sx={{ mt: 1, position: 'relative' }}>
+            {/* Device Switch/Toggle Visual */}
+            <Box sx={{ 
+              position: 'absolute',
+              top: -5,
+              right: 5,
+              width: 20,
+              height: 12,
+              backgroundColor: '#4caf50',
+              borderRadius: '6px',
+              border: '1px solid #388e3c',
+              cursor: 'pointer',
+              transition: 'all 0.2s ease',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              '&::after': {
+                content: '""',
+                width: 8,
+                height: 8,
+                backgroundColor: '#ffffff',
+                borderRadius: '50%',
+                boxShadow: '0 1px 2px rgba(0,0,0,0.3)',
+              }
+            }} />
+            
+            {/* LED Indicator - only show when device is active/configured */}
+            {slot.current_setting && (
+              <Box sx={{
+                position: 'absolute',
+                top: -5,
+                right: 30,
+                width: 6,
+                height: 6,
+                backgroundColor: '#4caf50',
+                borderRadius: '50%',
+                boxShadow: '0 0 4px #4caf50, 0 0 8px rgba(76, 175, 80, 0.5)',
+              }} />
+            )}
+            
+            <Typography variant="subtitle2" component="div" sx={{ fontWeight: 'bold', fontSize: '0.8rem' }}>
               {slot.device_label || 'Unnamed Device'}
             </Typography>
-            <Typography variant="caption" color="text.secondary">
-              {slot.device_type.name}
+            <Typography variant="caption" color="text.secondary" sx={{ fontSize: '0.7rem' }}>
+              {slot.device_template.name}
             </Typography>
             {slot.spans_slots > 1 && (
               <Chip
@@ -152,7 +219,6 @@ const SlotComponent: React.FC<SlotProps> = ({ slot, onSlotUpdate }) => {
 
 const PanelView: React.FC<PanelViewProps> = ({ panel, onPanelUpdate }) => {
   const [slots, setSlots] = useState<PanelSlot[]>([]);
-  const [devices, setDevices] = useState<DeviceType[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [configDialog, setConfigDialog] = useState<{
     open: boolean;
@@ -178,25 +244,27 @@ const PanelView: React.FC<PanelViewProps> = ({ panel, onPanelUpdate }) => {
         // Panel exists but has no slots yet - initialize them
         const initialSlots: PanelSlot[] = [];
         let slotNumber = 1;
-        const totalSlots = panel.rows * panel.slots_per_row;
+        const totalSlots = panel.template ? panel.template.rows * panel.template.slots_per_row : 0;
         
-        for (let row = 1; row <= panel.rows; row++) {
-          for (let col = 1; col <= panel.slots_per_row; col++) {
-            if (slotNumber <= totalSlots) {
-              initialSlots.push({
-                id: slotNumber,
-                panel_id: panel.id,
-                slot_number: slotNumber,
-                row: row,
-                column: col,
-                device_type_id: undefined,
-                device_label: undefined,
-                current_setting: undefined,
-                is_occupied: false,
-                spans_slots: 1,
-                device_type: undefined,
-              });
-              slotNumber++;
+        if (panel.template) {
+          for (let row = 1; row <= panel.template.rows; row++) {
+            for (let col = 1; col <= panel.template.slots_per_row; col++) {
+              if (slotNumber <= totalSlots) {
+                initialSlots.push({
+                  id: slotNumber,
+                  panel_id: panel.id,
+                  slot_number: slotNumber,
+                  row: row,
+                  column: col,
+                  device_template_id: undefined,
+                  device_label: undefined,
+                  current_setting: undefined,
+                  is_occupied: false,
+                  spans_slots: 1,
+                  device_template: undefined,
+                });
+                slotNumber++;
+              }
             }
           }
         }
@@ -211,23 +279,21 @@ const PanelView: React.FC<PanelViewProps> = ({ panel, onPanelUpdate }) => {
       console.error('Error fetching panel data:', err);
       setError('Failed to load panel configuration');
     }
-  }, [panel.id, panel.rows, panel.slots_per_row, onPanelUpdate]);
+  }, [panel.id, panel.template?.rows, panel.template?.slots_per_row, onPanelUpdate]);
 
   useEffect(() => {
     fetchPanelData();
     fetchDevices();
-  }, [panel.id, panel.rows, panel.slots_per_row, fetchPanelData]);
+  }, [panel.id, panel.template?.rows, panel.template?.slots_per_row, fetchPanelData]);
 
   const fetchDevices = async () => {
-    try {
-      const response = await deviceAPI.getHagerDeviceLibrary();
-      setDevices(response.data);
-    } catch (err) {
-      console.error('Error fetching devices:', err);
-    }
+    // No longer needed - templates are fetched directly from the library
   };
 
-  const handleSlotUpdate = async (slotNumber: number, deviceId: number | null, label?: string, currentSetting?: number, slotsRequired?: number) => {
+  const handleSlotUpdate = async (slotNumber: number, deviceTemplateId: number | null, label?: string, currentSetting?: number, slotsRequired?: number) => {
+    // Clear any existing errors when starting a new operation
+    setError(null);
+    
     try {
       const slot = slots.find(s => s.slot_number === slotNumber);
       if (!slot) {
@@ -235,46 +301,20 @@ const PanelView: React.FC<PanelViewProps> = ({ panel, onPanelUpdate }) => {
         return;
       }
 
-      if (!deviceId) {
+      if (!deviceTemplateId) {
         // Remove device using API
-        await deviceAPI.removeDeviceFromSlot(slot.id);
+        await deviceAPI.updatePanelSlot(slot.id, {
+          device_template_id: null,
+          device_label: undefined,
+          current_setting: undefined,
+        });
         
         // Refresh panel data to get updated state
         await fetchPanelData();
       } else {
-        // For device placement, we need to handle the library-to-database mapping
-        let actualDeviceTypeId = deviceId;
-        
-        // Check if this is a library device that needs to be created in the database
-        const existingDeviceTypes = await deviceAPI.getAllDeviceTypes();
-        const existingDevice = existingDeviceTypes.data.find((dt: any) => dt.id === deviceId);
-        
-        if (!existingDevice) {
-          // This is a library device - need to create it in the database first
-          const libraryDevices = await deviceAPI.getHagerDeviceLibrary();
-          const libraryDevice = libraryDevices.data.find((ld: any) => ld.id === deviceId);
-          
-          if (libraryDevice) {
-            const createdDevice = await deviceAPI.createDeviceType({
-              name: libraryDevice.name,
-              category: libraryDevice.category,
-              manufacturer: libraryDevice.manufacturer,
-              model: libraryDevice.model,
-              slots_required: libraryDevice.slots_required,
-              max_current: libraryDevice.max_current,
-              voltage_range: libraryDevice.voltage_range,
-              description: libraryDevice.description,
-            });
-            actualDeviceTypeId = createdDevice.data.id;
-          } else {
-            setError('Device not found in library');
-            return;
-          }
-        }
-
-        // Place device using API
+        // Place device using template ID directly
         await deviceAPI.updatePanelSlot(slot.id, {
-          device_type_id: actualDeviceTypeId,
+          device_template_id: deviceTemplateId,
           device_label: label,
           current_setting: currentSetting,
         });
@@ -287,13 +327,20 @@ const PanelView: React.FC<PanelViewProps> = ({ panel, onPanelUpdate }) => {
     } catch (err: any) {
       console.error('Error updating slot:', err);
       setError(err.response?.data?.detail || 'Failed to update slot configuration');
+      
+      // Always refresh panel data to ensure UI consistency, even after errors
+      try {
+        await fetchPanelData();
+      } catch (refreshErr) {
+        console.error('Error refreshing panel data after failed operation:', refreshErr);
+      }
     }
   };
 
   const handleSlotClick = (slot: PanelSlot) => {
-    if (slot.device_type_id) {
+    if (slot.device_template_id) {
       setConfigDialog({ open: true, slot });
-      setSelectedDeviceId(slot.device_type_id);
+      setSelectedDeviceId(slot.device_template_id);
       setDeviceLabel(slot.device_label || '');
       setCurrentSetting(slot.current_setting?.toString() || '');
     }
@@ -324,8 +371,9 @@ const PanelView: React.FC<PanelViewProps> = ({ panel, onPanelUpdate }) => {
   // Group slots by rows for display
   const organizeSlotsByRows = () => {
     const rowsArray: PanelSlot[][] = [];
+    const rows = panel.template ? panel.template.rows : 0;
     
-    for (let row = 1; row <= panel.rows; row++) {
+    for (let row = 1; row <= rows; row++) {
       const rowSlots = slots
         .filter(slot => slot.row === row)
         .sort((a, b) => a.column - b.column);
@@ -335,51 +383,101 @@ const PanelView: React.FC<PanelViewProps> = ({ panel, onPanelUpdate }) => {
     return rowsArray;
   };
 
-  if (error) {
-    return <Alert severity="error">{error}</Alert>;
-  }
+  const handleErrorDismiss = () => {
+    setError(null);
+  };
+
+  // Auto-dismiss errors after 5 seconds
+  useEffect(() => {
+    if (error) {
+      const timer = setTimeout(() => {
+        setError(null);
+      }, 5000);
+      
+      return () => clearTimeout(timer);
+    }
+  }, [error]);
 
   return (
     <Box>
+      {/* Dismissible Error Alert */}
+      {error && (
+        <Alert 
+          severity="error" 
+          onClose={handleErrorDismiss}
+          sx={{ mb: 2 }}
+        >
+          {error}
+        </Alert>
+      )}
+      
       <Box sx={{ mb: 3 }}>
         <Typography variant="h6" gutterBottom>
           Panel Configuration
         </Typography>
         <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
           <Chip
-            label={`${panel.total_slots} slots`}
+            label={`${panel.template?.total_slots || 0} slots`}
             variant="outlined"
           />
           <Chip
-            label={`${panel.rows} rows × ${panel.slots_per_row} slots`}
+            label={`${panel.template?.rows || 0} rows × ${panel.template?.slots_per_row || 0} slots`}
             variant="outlined"
             color="primary"
           />
           <Chip
-            label={`${panel.voltage}V`}
+            label={`${panel.template?.voltage || 0}V`}
             variant="outlined"
           />
           <Chip
-            label={`${panel.current_rating}A`}
+            label={`${panel.template?.max_current || 0}A`}
             variant="outlined"
           />
         </Box>
       </Box>
 
       {/* Panel Layout by Rows */}
-      <Box sx={{ border: '2px solid #ddd', borderRadius: 2, p: 2, backgroundColor: '#f9f9f9' }}>
+      <Box className="panel-enclosure">
         {organizeSlotsByRows().map((rowSlots, rowIndex) => (
-          <Box key={rowIndex} sx={{ mb: rowIndex < panel.rows - 1 ? 2 : 0 }}>
-            <Typography variant="subtitle2" color="text.secondary" sx={{ mb: 1 }}>
+          <Box key={rowIndex} className="panel-row">
+            {/* DIN Rail Background */}
+            <Box className="din-rail">
+              <Box className="din-rail-screws">
+                <Box className="din-rail-screw"></Box>
+                <Box className="din-rail-screw"></Box>
+              </Box>
+            </Box>
+            
+            {/* Row Label */}
+            <Typography 
+              variant="subtitle2" 
+              color="text.secondary" 
+              sx={{ 
+                mb: 1, 
+                position: 'relative', 
+                zIndex: 3,
+                backgroundColor: 'rgba(255,255,255,0.8)',
+                padding: '2px 8px',
+                borderRadius: '4px',
+                display: 'inline-block',
+                fontSize: '0.75rem',
+                fontWeight: 'bold'
+              }}
+            >
               Row {rowIndex + 1}
             </Typography>
-            <Grid container spacing={1}>
+            
+            {/* Device Slots */}
+            <Grid container spacing={1} sx={{ position: 'relative', zIndex: 2 }}>
               {rowSlots.map((slot) => (
                 <Grid 
                   key={slot.slot_number}
-                  size={{ xs: 12 / panel.slots_per_row }}
+                  size={{ xs: 12 / (panel.template?.slots_per_row || 1) }}
                 >
-                  <Box onClick={() => handleSlotClick(slot)}>
+                  <Box 
+                    onClick={() => handleSlotClick(slot)}
+                    className="device-slot"
+                  >
                     <SlotComponent
                       slot={slot}
                       onSlotUpdate={handleSlotUpdate}
@@ -399,21 +497,12 @@ const PanelView: React.FC<PanelViewProps> = ({ panel, onPanelUpdate }) => {
         </DialogTitle>
         <DialogContent sx={{ pt: 2 }}>
           <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-            <TextField
-              select
-              label="Device Type"
-              value={selectedDeviceId || ''}
-              onChange={(e) => setSelectedDeviceId(Number(e.target.value))}
-              fullWidth
-            >
-              <MenuItem value="">None</MenuItem>
-              {devices.map((device) => (
-                <MenuItem key={device.id} value={device.id}>
-                  {device.name} - {device.model}
-                </MenuItem>
-              ))}
-            </TextField>
-
+            {configDialog.slot?.device_template && (
+              <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
+                Device: {configDialog.slot.device_template.name} - {configDialog.slot.device_template.model}
+              </Typography>
+            )}
+            
             <TextField
               label="Device Label"
               value={deviceLabel}

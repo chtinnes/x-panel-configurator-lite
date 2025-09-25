@@ -179,7 +179,7 @@ const WiringView: React.FC<WiringViewProps> = ({ panel }) => {
     if (!slot) return `Slot ${slotId}`;
     
     if (slot.device_label) return `${slot.slot_number}: ${slot.device_label}`;
-    if (slot.device_type) return `${slot.slot_number}: ${slot.device_type.name}`;
+    if (slot.device_template) return `${slot.slot_number}: ${slot.device_template.name}`;
     return `Slot ${slot.slot_number}`;
   };
 

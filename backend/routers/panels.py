@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from typing import List
 from database import get_db
-from models import Panel, PanelSlot
+from models import Panel, PanelSlot, PanelTemplate
 from schemas import Panel as PanelSchema, PanelCreate, PanelUpdate, PanelWithSlots
 
 router = APIRouter()
@@ -23,27 +23,35 @@ def get_panel(panel_id: int, db: Session = Depends(get_db)):
 
 @router.post("/", response_model=PanelSchema)
 def create_panel(panel: PanelCreate, db: Session = Depends(get_db)):
-    """Create a new panel"""
-    # Exclude total_slots from dict since it's a computed property
-    panel_data = panel.dict(exclude={'total_slots'})
+    """Create a new panel instance from a template"""
+    # Get the template to determine panel layout
+    template = db.query(PanelTemplate).filter(PanelTemplate.id == panel.template_id).first()
+    if not template:
+        raise HTTPException(status_code=404, detail="Panel template not found")
+    
+    # Create the panel instance
+    panel_data = panel.dict()
     db_panel = Panel(**panel_data)
     db.add(db_panel)
     db.commit()
     db.refresh(db_panel)
     
-    # Create empty slots for the panel organized by rows
+    # Create empty slots for the panel organized by rows based on template
     slot_number = 1
-    total_slots = panel.rows * panel.slots_per_row
+    template_rows = getattr(template, 'rows', 0)
+    template_slots_per_row = getattr(template, 'slots_per_row', 0)
+    total_slots = getattr(template, 'total_slots', 0)
     
-    for row in range(1, panel.rows + 1):
-        for col in range(1, panel.slots_per_row + 1):
+    for row in range(1, template_rows + 1):
+        for col in range(1, template_slots_per_row + 1):
             if slot_number <= total_slots:
                 slot = PanelSlot(
                     panel_id=db_panel.id,
                     slot_number=slot_number,
                     row=row,
                     column=col,
-                    is_occupied=False
+                    is_occupied=False,
+                    spans_slots=1
                 )
                 db.add(slot)
                 slot_number += 1

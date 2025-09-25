@@ -1,6 +1,6 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from routers import panels, devices, wiring
+from routers import panels, devices, wiring, templates
 from database import engine, Base
 
 # Create database tables
@@ -25,6 +25,7 @@ app.add_middleware(
 app.include_router(panels.router, prefix="/api/panels", tags=["panels"])
 app.include_router(devices.router, prefix="/api/devices", tags=["devices"])
 app.include_router(wiring.router, prefix="/api/wiring", tags=["wiring"])
+app.include_router(templates.router, prefix="/api/templates", tags=["templates"])
 
 @app.get("/")
 def read_root():

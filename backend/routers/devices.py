@@ -2,50 +2,27 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from typing import List
 from database import get_db
-from models import DeviceType, PanelSlot
-from schemas import DeviceType as DeviceTypeSchema, DeviceTypeCreate, PanelSlot as PanelSlotSchema, PanelSlotUpdate
+from models import DeviceTemplate, PanelSlot
+from schemas import PanelSlot as PanelSlotSchema, PanelSlotUpdate
 
 router = APIRouter()
 
-@router.get("/types", response_model=List[DeviceTypeSchema])
-def get_device_types(skip: int = 0, limit: int = 100, db: Session = Depends(get_db)):
-    """Get all device types"""
-    device_types = db.query(DeviceType).offset(skip).limit(limit).all()
-    return device_types
-
-@router.get("/types/{device_type_id}", response_model=DeviceTypeSchema)
-def get_device_type(device_type_id: int, db: Session = Depends(get_db)):
-    """Get a specific device type"""
-    device_type = db.query(DeviceType).filter(DeviceType.id == device_type_id).first()
-    if not device_type:
-        raise HTTPException(status_code=404, detail="Device type not found")
-    return device_type
-
-@router.post("/types", response_model=DeviceTypeSchema)
-def create_device_type(device_type: DeviceTypeCreate, db: Session = Depends(get_db)):
-    """Create a new device type"""
-    db_device_type = DeviceType(**device_type.dict())
-    db.add(db_device_type)
-    db.commit()
-    db.refresh(db_device_type)
-    return db_device_type
-
-def can_place_device_at_slot(db: Session, slot_id: int, device_type_id: int) -> bool:
+def can_place_device_at_slot(db: Session, slot_id: int, device_template_id: int) -> bool:
     """Check if a device can be placed at the given slot"""
-    # Get the slot and device type
+    # Get the slot and device template
     slot = db.query(PanelSlot).filter(PanelSlot.id == slot_id).first()
     if not slot:
         return False
     
-    device_type = db.query(DeviceType).filter(DeviceType.id == device_type_id).first()
-    if not device_type:
+    device_template = db.query(DeviceTemplate).filter(DeviceTemplate.id == device_template_id).first()
+    if not device_template:
         return False
     
-    slots_required = device_type.slots_required
+    slots_required = getattr(device_template, 'slots_required', 1)
     
     # For single slot devices, just check if current slot is free
     if slots_required == 1:
-        return not slot.is_occupied
+        return not getattr(slot, 'is_occupied', True)
     
     # For multi-slot devices, check consecutive slots in the same row
     panel_slots = db.query(PanelSlot).filter(
@@ -56,7 +33,7 @@ def can_place_device_at_slot(db: Session, slot_id: int, device_type_id: int) -> 
     # Find the starting slot index in its row
     slot_index = None
     for i, s in enumerate(panel_slots):
-        if s.id == slot_id:
+        if getattr(s, 'id', None) == slot_id:
             slot_index = i
             break
     
@@ -69,7 +46,7 @@ def can_place_device_at_slot(db: Session, slot_id: int, device_type_id: int) -> 
     
     # Check if all required slots are free
     for i in range(slot_index, slot_index + slots_required):
-        if panel_slots[i].is_occupied:
+        if getattr(panel_slots[i], 'is_occupied', True):
             return False
     
     return True
@@ -82,29 +59,39 @@ def update_panel_slot(slot_id: int, slot_update: PanelSlotUpdate, db: Session = 
         raise HTTPException(status_code=404, detail="Panel slot not found")
     
     # If placing a device, check if it can be placed
-    if slot_update.device_type_id is not None:
-        # Get device type to check slot requirements
-        device_type = db.query(DeviceType).filter(DeviceType.id == slot_update.device_type_id).first()
-        if not device_type:
-            raise HTTPException(status_code=404, detail="Device type not found")
+    if slot_update.device_template_id is not None:
+        # Get device template to check slot requirements
+        device_template = db.query(DeviceTemplate).filter(DeviceTemplate.id == slot_update.device_template_id).first()
+        if not device_template:
+            raise HTTPException(status_code=404, detail="Device template not found")
         
-        # Check if enough consecutive slots are available
-        if not can_place_device_at_slot(db, slot_id, slot_update.device_type_id):
-            raise HTTPException(status_code=400, detail="Cannot place device at this slot - not enough consecutive free slots")
+        # Check if this is updating an existing device (same device template) or placing a new one
+        current_template_id = getattr(db_slot, 'device_template_id', None)
+        is_same_device = (current_template_id is not None and 
+                         current_template_id == slot_update.device_template_id)
         
-        # Remove any existing device from this slot first (clean up any multi-slot device)
-        remove_device_from_slot(slot_id, db)
+        # Only check slot availability for new device placements, not when updating properties of existing devices
+        if not is_same_device:
+            # Check if enough consecutive slots are available
+            if not can_place_device_at_slot(db, slot_id, slot_update.device_template_id):
+                raise HTTPException(status_code=400, detail="Cannot place device at this slot - not enough consecutive free slots")
+            
+            # Remove any existing device from this slot first (clean up any multi-slot device)
+            remove_device_from_slot(slot_id, db)
         
         # Update the primary slot with device information
-        for field, value in slot_update.dict(exclude_unset=True).items():
+        for field, value in slot_update.model_dump(exclude_unset=True).items():
             if hasattr(db_slot, field):
                 setattr(db_slot, field, value)
         
-        db_slot.is_occupied = True
-        db_slot.spans_slots = device_type.slots_required
+        # Only update occupation and slot spanning for new device placements
+        if not is_same_device:
+            setattr(db_slot, 'is_occupied', True)
+            setattr(db_slot, 'spans_slots', device_template.slots_required)
         
         # If device spans multiple slots, mark additional slots as occupied
-        if device_type.slots_required > 1:
+        slots_required = getattr(device_template, 'slots_required', 1)
+        if slots_required > 1:
             # Get all slots in the same row
             panel_slots = db.query(PanelSlot).filter(
                 PanelSlot.panel_id == db_slot.panel_id,
@@ -114,17 +101,17 @@ def update_panel_slot(slot_id: int, slot_update: PanelSlotUpdate, db: Session = 
             # Find starting slot index
             slot_index = None
             for i, s in enumerate(panel_slots):
-                if s.id == slot_id:
+                if getattr(s, 'id', None) == slot_id:
                     slot_index = i
                     break
             
             if slot_index is not None:
                 # Mark additional slots as occupied (but not configured)
-                for i in range(slot_index + 1, min(slot_index + device_type.slots_required, len(panel_slots))):
+                for i in range(slot_index + 1, min(slot_index + slots_required, len(panel_slots))):
                     additional_slot = panel_slots[i]
-                    additional_slot.is_occupied = True
-                    additional_slot.device_type_id = None  # Only the primary slot has the device reference
-                    additional_slot.spans_slots = 0  # Indicate this is a secondary slot
+                    setattr(additional_slot, 'is_occupied', True)
+                    setattr(additional_slot, 'device_template_id', None)
+                    setattr(additional_slot, 'spans_slots', 0)
         
     else:
         # Just removing a device
@@ -142,7 +129,10 @@ def remove_device_from_slot(slot_id: int, db: Session = Depends(get_db)):
         raise HTTPException(status_code=404, detail="Panel slot not found")
     
     # If this slot spans multiple slots, we need to free them all
-    if db_slot.is_occupied and db_slot.spans_slots > 1:
+    is_occupied = getattr(db_slot, 'is_occupied', False)
+    spans_slots = getattr(db_slot, 'spans_slots', 1)
+    
+    if is_occupied and spans_slots > 1:
         # Get all slots in the same row
         panel_slots = db.query(PanelSlot).filter(
             PanelSlot.panel_id == db_slot.panel_id,
@@ -152,168 +142,57 @@ def remove_device_from_slot(slot_id: int, db: Session = Depends(get_db)):
         # Find starting slot index
         slot_index = None
         for i, s in enumerate(panel_slots):
-            if s.id == slot_id:
+            if getattr(s, 'id', None) == slot_id:
                 slot_index = i
                 break
         
         if slot_index is not None:
             # Clear all spanned slots
-            for i in range(slot_index, min(slot_index + db_slot.spans_slots, len(panel_slots))):
+            for i in range(slot_index, min(slot_index + spans_slots, len(panel_slots))):
                 slot_to_clear = panel_slots[i]
-                slot_to_clear.device_type_id = None
-                slot_to_clear.device_label = None
-                slot_to_clear.current_setting = None
-                slot_to_clear.is_occupied = False
-                slot_to_clear.spans_slots = 1
+                setattr(slot_to_clear, 'device_template_id', None)
+                setattr(slot_to_clear, 'device_label', None)
+                setattr(slot_to_clear, 'current_setting', None)
+                setattr(slot_to_clear, 'is_occupied', False)
+                setattr(slot_to_clear, 'spans_slots', 1)
     else:
         # Single slot device or already cleared
-        db_slot.device_type_id = None
-        db_slot.device_label = None
-        db_slot.current_setting = None
-        db_slot.is_occupied = False
-        db_slot.spans_slots = 1
+        setattr(db_slot, 'device_template_id', None)
+        setattr(db_slot, 'device_label', None)
+        setattr(db_slot, 'current_setting', None)
+        setattr(db_slot, 'is_occupied', False)
+        setattr(db_slot, 'spans_slots', 1)
     
     db.commit()
     return {"message": "Device removed from slot"}
 
-@router.get("/slots/{slot_id}/can-place/{device_type_id}")
-def check_device_placement(slot_id: int, device_type_id: int, db: Session = Depends(get_db)):
+@router.get("/slots/{slot_id}/can-place/{device_template_id}")
+def check_device_placement(slot_id: int, device_template_id: int, db: Session = Depends(get_db)):
     """Check if a device can be placed at a specific slot"""
-    can_place = can_place_device_at_slot(db, slot_id, device_type_id)
+    can_place = can_place_device_at_slot(db, slot_id, device_template_id)
     
     # Get additional info for debugging
     slot = db.query(PanelSlot).filter(PanelSlot.id == slot_id).first()
-    device_type = db.query(DeviceType).filter(DeviceType.id == device_type_id).first()
+    device_template = db.query(DeviceTemplate).filter(DeviceTemplate.id == device_template_id).first()
     
     return {
         "can_place": can_place,
         "slot_info": {
-            "id": slot.id if slot else None,
-            "row": slot.row if slot else None,
-            "column": slot.column if slot else None,
-            "is_occupied": slot.is_occupied if slot else None,
-            "spans_slots": slot.spans_slots if slot else None
+            "id": getattr(slot, 'id', None),
+            "row": getattr(slot, 'row', None),
+            "column": getattr(slot, 'column', None),
+            "is_occupied": getattr(slot, 'is_occupied', None),
+            "spans_slots": getattr(slot, 'spans_slots', None)
         },
         "device_info": {
-            "id": device_type.id if device_type else None,
-            "name": device_type.name if device_type else None,
-            "slots_required": device_type.slots_required if device_type else None
+            "id": getattr(device_template, 'id', None),
+            "name": getattr(device_template, 'name', None),
+            "slots_required": getattr(device_template, 'slots_required', None)
         }
     }
 
 @router.get("/library/hager")
 def get_hager_device_library():
-    """Get predefined Hager device library"""
-    devices = [
-        {
-            "id": 1,
-            "name": "MCB 6A Type B",
-            "category": "Protection",
-            "manufacturer": "Hager",
-            "model": "MBN106",
-            "slots_required": 1,
-            "max_current": 6.0,
-            "voltage_range": "230V",
-            "description": "6A Type B Miniature Circuit Breaker"
-        },
-        {
-            "id": 2,
-            "name": "MCB 10A Type B", 
-            "category": "Protection",
-            "manufacturer": "Hager",
-            "model": "MBN110",
-            "slots_required": 1,
-            "max_current": 10.0,
-            "voltage_range": "230V",
-            "description": "10A Type B Miniature Circuit Breaker"
-        },
-        {
-            "id": 3,
-            "name": "MCB 16A Type B",
-            "category": "Protection", 
-            "manufacturer": "Hager",
-            "model": "MBN116",
-            "slots_required": 1,
-            "max_current": 16.0,
-            "voltage_range": "230V",
-            "description": "16A Type B Miniature Circuit Breaker"
-        },
-        {
-            "id": 4,
-            "name": "MCB 20A Type B",
-            "category": "Protection",
-            "manufacturer": "Hager",
-            "model": "MBN120", 
-            "slots_required": 1,
-            "max_current": 20.0,
-            "voltage_range": "230V",
-            "description": "20A Type B Miniature Circuit Breaker"
-        },
-        {
-            "id": 5,
-            "name": "MCB 32A Type B",
-            "category": "Protection",
-            "manufacturer": "Hager",
-            "model": "MBN132",
-            "slots_required": 1,
-            "max_current": 32.0,
-            "voltage_range": "230V",
-            "description": "32A Type B Miniature Circuit Breaker"
-        },
-        {
-            "id": 6,
-            "name": "RCBO 16A Type B 30mA",
-            "category": "Protection",
-            "manufacturer": "Hager",
-            "model": "ADA116G",
-            "slots_required": 2,
-            "max_current": 16.0,
-            "voltage_range": "230V",
-            "description": "16A Type B RCBO with 30mA RCD protection"
-        },
-        {
-            "id": 7,
-            "name": "RCBO 20A Type B 30mA",
-            "category": "Protection", 
-            "manufacturer": "Hager",
-            "model": "ADA120G",
-            "slots_required": 2,
-            "max_current": 20.0,
-            "voltage_range": "230V",
-            "description": "20A Type B RCBO with 30mA RCD protection"
-        },
-        {
-            "id": 8,
-            "name": "RCD 63A 30mA",
-            "category": "Protection",
-            "manufacturer": "Hager",
-            "model": "CDC263D",
-            "slots_required": 2,
-            "max_current": 63.0,
-            "voltage_range": "230V",
-            "description": "63A 30mA RCD for overall protection"
-        },
-        {
-            "id": 9,
-            "name": "Smart Meter Interface",
-            "category": "Measurement",
-            "manufacturer": "Hager",
-            "model": "EHZ361Z5",
-            "slots_required": 4,
-            "max_current": 80.0,
-            "voltage_range": "230V",
-            "description": "Smart electricity meter with digital interface"
-        },
-        {
-            "id": 10,
-            "name": "Contactor 25A",
-            "category": "Control",
-            "manufacturer": "Hager",
-            "model": "ERC225",
-            "slots_required": 2,
-            "max_current": 25.0,
-            "voltage_range": "230V",
-            "description": "25A modular contactor for switching loads"
-        }
-    ]
-    return devices
+    """Redirect to template-based device library - DEPRECATED"""
+    from fastapi.responses import RedirectResponse
+    return RedirectResponse(url="/api/templates/library/devices/hager", status_code=301)

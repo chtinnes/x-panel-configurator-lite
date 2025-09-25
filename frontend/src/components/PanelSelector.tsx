@@ -7,6 +7,7 @@ import {
   DialogContent,
   DialogActions,
   TextField,
+  MenuItem,
   List,
   ListItem,
   ListItemButton,
@@ -18,7 +19,7 @@ import {
 } from '@mui/material';
 import { Add as AddIcon, Delete as DeleteIcon } from '@mui/icons-material';
 import { Panel, PanelTemplate, PanelCreate } from '../types';
-import { panelAPI } from '../services/api';
+import { panelAPI, templateAPI } from '../services/api';
 
 interface PanelSelectorProps {
   onPanelSelect: (panel: Panel) => void;
@@ -31,14 +32,11 @@ const PanelSelector: React.FC<PanelSelectorProps> = ({ onPanelSelect }) => {
   const [templateDialogOpen, setTemplateDialogOpen] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [selectedTemplate, setSelectedTemplate] = useState<number | ''>('');
   const [newPanel, setNewPanel] = useState<PanelCreate>({
     name: '',
-    model: '',
-    manufacturer: 'Hager',
-    rows: 2,
-    slots_per_row: 6,
-    voltage: 230,
-    current_rating: 63,
+    template_id: 0,
+    location: '',
     description: '',
   });
 
@@ -62,7 +60,7 @@ const PanelSelector: React.FC<PanelSelectorProps> = ({ onPanelSelect }) => {
 
   const fetchTemplates = async () => {
     try {
-      const response = await panelAPI.getHagerVoltaTemplates();
+      const response = await templateAPI.getPanelLibrary();
       setTemplates(response.data);
     } catch (err) {
       console.error('Error fetching templates:', err);
@@ -70,21 +68,27 @@ const PanelSelector: React.FC<PanelSelectorProps> = ({ onPanelSelect }) => {
   };
 
   const handleCreatePanel = async () => {
+    if (!selectedTemplate) {
+      setError('Please select a template');
+      return;
+    }
+    
     try {
       setLoading(true);
-      const response = await panelAPI.createPanel(newPanel);
+      const panelData = {
+        ...newPanel,
+        template_id: selectedTemplate as number,
+      };
+      const response = await panelAPI.createPanel(panelData);
       const createdPanel = response.data;
       setPanels([...panels, createdPanel]);
       setDialogOpen(false);
       onPanelSelect(createdPanel);
+      setSelectedTemplate('');
       setNewPanel({
         name: '',
-        model: '',
-        manufacturer: 'Hager',
-        rows: 2,
-        slots_per_row: 6,
-        voltage: 230,
-        current_rating: 63,
+        template_id: 0,
+        location: '',
         description: '',
       });
     } catch (err) {
@@ -162,7 +166,10 @@ const PanelSelector: React.FC<PanelSelectorProps> = ({ onPanelSelect }) => {
             <ListItemButton onClick={() => onPanelSelect(panel)}>
               <ListItemText
                 primary={panel.name}
-                secondary={`${panel.model} - ${panel.total_slots} slots (${panel.rows}×${panel.slots_per_row})`}
+                secondary={panel.template ? 
+                  `${panel.template.model} - ${panel.template.total_slots} slots (${panel.template.rows}×${panel.template.slots_per_row})` :
+                  'Template information not available'
+                }
               />
             </ListItemButton>
             <ListItemSecondaryAction>
@@ -183,7 +190,7 @@ const PanelSelector: React.FC<PanelSelectorProps> = ({ onPanelSelect }) => {
 
       {/* Create Panel Dialog */}
       <Dialog open={dialogOpen} onClose={() => setDialogOpen(false)} maxWidth="sm" fullWidth>
-        <DialogTitle>Create New Panel</DialogTitle>
+        <DialogTitle>Create New Panel Instance</DialogTitle>
         <DialogContent>
           <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2, pt: 1 }}>
             <TextField
@@ -192,88 +199,62 @@ const PanelSelector: React.FC<PanelSelectorProps> = ({ onPanelSelect }) => {
               onChange={(e) => setNewPanel({ ...newPanel, name: e.target.value })}
               fullWidth
               required
+              placeholder="e.g., Main Distribution Board, Kitchen Panel"
             />
+            
             <TextField
-              label="Model"
-              value={newPanel.model}
-              onChange={(e) => setNewPanel({ ...newPanel, model: e.target.value })}
+              select
+              label="Panel Template"
+              value={selectedTemplate}
+              onChange={(e) => setSelectedTemplate(Number(e.target.value))}
               fullWidth
               required
-            />
+              helperText="Select a pre-configured panel template"
+            >
+              <MenuItem value="">Choose a template...</MenuItem>
+              {templates.map((template) => (
+                <MenuItem key={template.id} value={template.id}>
+                  {template.name} - {template.model} ({template.rows}×{template.slots_per_row} slots)
+                </MenuItem>
+              ))}
+            </TextField>
+            
+            {selectedTemplate && (
+              <Box sx={{ p: 2, backgroundColor: '#f5f5f5', borderRadius: 1 }}>
+                <Typography variant="subtitle2" gutterBottom>
+                  Template Details:
+                </Typography>
+                {(() => {
+                  const template = templates.find(t => t.id === selectedTemplate);
+                  if (!template) return null;
+                  return (
+                    <Typography variant="body2" color="text.secondary">
+                      {template.manufacturer} {template.model} - {template.total_slots} slots 
+                      ({template.rows} rows × {template.slots_per_row} slots), 
+                      {template.voltage}V, {template.max_current}A
+                      {template.description && <><br/>{template.description}</>}
+                    </Typography>
+                  );
+                })()}
+              </Box>
+            )}
+            
             <TextField
-              label="Manufacturer"
-              value={newPanel.manufacturer}
-              onChange={(e) => setNewPanel({ ...newPanel, manufacturer: e.target.value })}
+              label="Location (Optional)"
+              value={newPanel.location || ''}
+              onChange={(e) => setNewPanel({ ...newPanel, location: e.target.value })}
               fullWidth
+              placeholder="e.g., Basement, Kitchen, Main Floor"
             />
+            
             <TextField
-              label="Number of Rows"
-              type="number"
-              value={newPanel.rows}
-              onChange={(e) => setNewPanel({ ...newPanel, rows: parseInt(e.target.value) })}
-              fullWidth
-              required
-              inputProps={{ min: 1, max: 4 }}
-              helperText="Typically 2-3 rows for standard panels"
-            />
-            <TextField
-              label="Slots per Row"
-              type="number"
-              value={newPanel.slots_per_row}
-              onChange={(e) => setNewPanel({ ...newPanel, slots_per_row: parseInt(e.target.value) })}
-              fullWidth
-              required
-              inputProps={{ min: 1, max: 12 }}
-              helperText="Number of devices that fit in one row"
-            />
-            <TextField
-              label="Total Slots"
-              value={newPanel.rows * newPanel.slots_per_row}
-              fullWidth
-              disabled
-              helperText="Automatically calculated from rows × slots per row"
-            />
-            <TextField
-              label="Number of Rows"
-              type="number"
-              value={newPanel.rows}
-              onChange={(e) => setNewPanel({ ...newPanel, rows: parseInt(e.target.value) })}
-              fullWidth
-              required
-              helperText="How many horizontal rows of devices"
-            />
-            <TextField
-              label="Slots per Row"
-              type="number"
-              value={newPanel.slots_per_row}
-              onChange={(e) => setNewPanel({ ...newPanel, slots_per_row: parseInt(e.target.value) })}
-              fullWidth
-              required
-              helperText="How many device slots in each row"
-            />
-            <TextField
-              label="Voltage (V)"
-              type="number"
-              value={newPanel.voltage}
-              onChange={(e) => setNewPanel({ ...newPanel, voltage: parseFloat(e.target.value) })}
-              fullWidth
-              required
-            />
-            <TextField
-              label="Current Rating (A)"
-              type="number"
-              value={newPanel.current_rating}
-              onChange={(e) => setNewPanel({ ...newPanel, current_rating: parseFloat(e.target.value) })}
-              fullWidth
-              required
-            />
-            <TextField
-              label="Description"
-              value={newPanel.description}
+              label="Description (Optional)"
+              value={newPanel.description || ''}
               onChange={(e) => setNewPanel({ ...newPanel, description: e.target.value })}
               fullWidth
               multiline
-              rows={2}
+              rows={3}
+              placeholder="Additional notes about this panel installation"
             />
           </Box>
         </DialogContent>
@@ -306,7 +287,7 @@ const PanelSelector: React.FC<PanelSelectorProps> = ({ onPanelSelect }) => {
                     secondary={
                       <Typography component="span" variant="body2">
                         {template.description}<br />
-                        {template.rows * template.slots_per_row} slots ({template.rows} rows × {template.slots_per_row} slots), {template.voltage}V, {template.current_rating}A
+                        {template.rows * template.slots_per_row} slots ({template.rows} rows × {template.slots_per_row} slots), {template.voltage}V, {template.max_current}A
                       </Typography>
                     }
                   />

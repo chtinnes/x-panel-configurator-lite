@@ -19,11 +19,11 @@ import {
   ExpandLess as ExpandLessIcon 
 } from '@mui/icons-material';
 import { useDrag, DragSourceMonitor } from 'react-dnd';
-import { DeviceLibraryItem } from '../types';
-import { deviceAPI } from '../services/api';
+import { DeviceTemplate } from '../types';
+import { templateAPI } from '../services/api';
 
 interface DeviceItemProps {
-  device: DeviceLibraryItem;
+  device: DeviceTemplate;
 }
 
 const DeviceItem: React.FC<DeviceItemProps> = ({ device }) => {
@@ -75,7 +75,7 @@ const DeviceItem: React.FC<DeviceItemProps> = ({ device }) => {
 };
 
 const DeviceLibrary: React.FC = () => {
-  const [devices, setDevices] = useState<DeviceLibraryItem[]>([]);
+  const [devices, setDevices] = useState<DeviceTemplate[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [expandedCategories, setExpandedCategories] = useState<Record<string, boolean>>({
     Protection: true,
@@ -91,7 +91,7 @@ const DeviceLibrary: React.FC = () => {
   const fetchDevices = async () => {
     try {
       setLoading(true);
-      const response = await deviceAPI.getHagerDeviceLibrary();
+      const response = await templateAPI.getDeviceLibrary();
       setDevices(response.data);
     } catch (err) {
       console.error('Error fetching device library:', err);
@@ -112,7 +112,7 @@ const DeviceLibrary: React.FC = () => {
     }
     acc[device.category].push(device);
     return acc;
-  }, {} as Record<string, DeviceLibraryItem[]>);
+  }, {} as Record<string, DeviceTemplate[]>);
 
   const toggleCategory = (category: string) => {
     setExpandedCategories(prev => ({

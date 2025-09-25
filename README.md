@@ -301,12 +301,24 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 - **Material-UI Team**: For beautiful and accessible React components
 - **React DnD**: For smooth drag-and-drop functionality
 
-## 📞 Support
+## � Documentation
+
+Comprehensive documentation is available in the `/docs` folder:
+
+- **[Overview](./docs/README.md)**: Project overview and quick start guide
+- **[Requirements](./docs/requirements.md)**: Detailed functional and technical requirements
+- **[Features](./docs/features.md)**: Complete feature documentation with user workflows
+- **[Architecture](./docs/architecture.md)**: Software architecture with domain models and diagrams
+- **[API Reference](./docs/api.md)**: Complete API documentation with examples
+- **[Developer Guide](./docs/developer-guide.md)**: Development setup, standards, and contribution guidelines
+
+## �📞 Support
 
 For support and questions:
 - **Create an issue** in the GitHub repository
-- **Check the API docs** at http://localhost:8000/docs
-- **Review Copilot instructions** in `.github/copilot-instructions.md`
+- **Check the documentation** in the `/docs` folder
+- **Review the API docs** at http://localhost:8000/docs
+- **Check Copilot instructions** in `.github/copilot-instructions.md`
 
 ---
 

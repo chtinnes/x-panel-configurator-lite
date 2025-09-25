@@ -35,7 +35,6 @@ const PanelSelector: React.FC<PanelSelectorProps> = ({ onPanelSelect }) => {
     name: '',
     model: '',
     manufacturer: 'Hager',
-    total_slots: 12,
     rows: 2,
     slots_per_row: 6,
     voltage: 230,
@@ -82,7 +81,6 @@ const PanelSelector: React.FC<PanelSelectorProps> = ({ onPanelSelect }) => {
         name: '',
         model: '',
         manufacturer: 'Hager',
-        total_slots: 12,
         rows: 2,
         slots_per_row: 6,
         voltage: 230,
@@ -209,14 +207,6 @@ const PanelSelector: React.FC<PanelSelectorProps> = ({ onPanelSelect }) => {
               fullWidth
             />
             <TextField
-              label="Total Slots"
-              type="number"
-              value={newPanel.total_slots}
-              onChange={(e) => setNewPanel({ ...newPanel, total_slots: parseInt(e.target.value) })}
-              fullWidth
-              required
-            />
-            <TextField
               label="Number of Rows"
               type="number"
               value={newPanel.rows}
@@ -235,6 +225,13 @@ const PanelSelector: React.FC<PanelSelectorProps> = ({ onPanelSelect }) => {
               required
               inputProps={{ min: 1, max: 12 }}
               helperText="Number of devices that fit in one row"
+            />
+            <TextField
+              label="Total Slots"
+              value={newPanel.rows * newPanel.slots_per_row}
+              fullWidth
+              disabled
+              helperText="Automatically calculated from rows × slots per row"
             />
             <TextField
               label="Number of Rows"
@@ -309,7 +306,7 @@ const PanelSelector: React.FC<PanelSelectorProps> = ({ onPanelSelect }) => {
                     secondary={
                       <Typography component="span" variant="body2">
                         {template.description}<br />
-                        {template.total_slots} slots ({template.rows} rows × {template.slots_per_row} slots), {template.voltage}V, {template.current_rating}A
+                        {template.rows * template.slots_per_row} slots ({template.rows} rows × {template.slots_per_row} slots), {template.voltage}V, {template.current_rating}A
                       </Typography>
                     }
                   />

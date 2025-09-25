@@ -1,6 +1,7 @@
 from sqlalchemy import Column, Integer, String, Float, Boolean, ForeignKey, Text, DateTime
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
+from sqlalchemy.ext.hybrid import hybrid_property
 from database import Base
 
 class Panel(Base):
@@ -10,7 +11,6 @@ class Panel(Base):
     name = Column(String, index=True)
     model = Column(String)  # e.g., "Hager Volta"
     manufacturer = Column(String, default="Hager")
-    total_slots = Column(Integer)
     rows = Column(Integer, default=2)  # Number of rows in the panel
     slots_per_row = Column(Integer)  # Number of slots per row
     voltage = Column(Float)  # e.g., 230V, 400V
@@ -18,6 +18,10 @@ class Panel(Base):
     description = Column(Text, nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
+    
+    @hybrid_property
+    def total_slots(self):
+        return self.rows * self.slots_per_row
     
     # Relationships
     slots = relationship("PanelSlot", back_populates="panel")

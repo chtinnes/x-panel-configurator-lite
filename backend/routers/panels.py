@@ -24,16 +24,20 @@ def get_panel(panel_id: int, db: Session = Depends(get_db)):
 @router.post("/", response_model=PanelSchema)
 def create_panel(panel: PanelCreate, db: Session = Depends(get_db)):
     """Create a new panel"""
-    db_panel = Panel(**panel.dict())
+    # Exclude total_slots from dict since it's a computed property
+    panel_data = panel.dict(exclude={'total_slots'})
+    db_panel = Panel(**panel_data)
     db.add(db_panel)
     db.commit()
     db.refresh(db_panel)
     
     # Create empty slots for the panel organized by rows
     slot_number = 1
+    total_slots = panel.rows * panel.slots_per_row
+    
     for row in range(1, panel.rows + 1):
         for col in range(1, panel.slots_per_row + 1):
-            if slot_number <= panel.total_slots:
+            if slot_number <= total_slots:
                 slot = PanelSlot(
                     panel_id=db_panel.id,
                     slot_number=slot_number,
@@ -80,7 +84,6 @@ def get_hager_volta_templates():
             "name": "Hager Volta 12 Way",
             "model": "VD112",
             "manufacturer": "Hager",
-            "total_slots": 12,
             "rows": 2,
             "slots_per_row": 6,
             "voltage": 230.0,
@@ -91,7 +94,6 @@ def get_hager_volta_templates():
             "name": "Hager Volta 18 Way",
             "model": "VD118",
             "manufacturer": "Hager", 
-            "total_slots": 18,
             "rows": 2,
             "slots_per_row": 9,
             "voltage": 230.0,
@@ -102,7 +104,6 @@ def get_hager_volta_templates():
             "name": "Hager Volta 24 Way",
             "model": "VD124",
             "manufacturer": "Hager",
-            "total_slots": 24,
             "rows": 3,
             "slots_per_row": 8,
             "voltage": 230.0,

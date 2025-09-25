@@ -30,6 +30,50 @@ def create_device_type(device_type: DeviceTypeCreate, db: Session = Depends(get_
     db.refresh(db_device_type)
     return db_device_type
 
+def can_place_device_at_slot(db: Session, slot_id: int, device_type_id: int) -> bool:
+    """Check if a device can be placed at the given slot"""
+    # Get the slot and device type
+    slot = db.query(PanelSlot).filter(PanelSlot.id == slot_id).first()
+    if not slot:
+        return False
+    
+    device_type = db.query(DeviceType).filter(DeviceType.id == device_type_id).first()
+    if not device_type:
+        return False
+    
+    slots_required = device_type.slots_required
+    
+    # For single slot devices, just check if current slot is free
+    if slots_required == 1:
+        return not slot.is_occupied
+    
+    # For multi-slot devices, check consecutive slots in the same row
+    panel_slots = db.query(PanelSlot).filter(
+        PanelSlot.panel_id == slot.panel_id,
+        PanelSlot.row == slot.row
+    ).order_by(PanelSlot.column).all()
+    
+    # Find the starting slot index in its row
+    slot_index = None
+    for i, s in enumerate(panel_slots):
+        if s.id == slot_id:
+            slot_index = i
+            break
+    
+    if slot_index is None:
+        return False
+    
+    # Check if we have enough consecutive free slots
+    if slot_index + slots_required > len(panel_slots):
+        return False
+    
+    # Check if all required slots are free
+    for i in range(slot_index, slot_index + slots_required):
+        if panel_slots[i].is_occupied:
+            return False
+    
+    return True
+
 @router.put("/slots/{slot_id}", response_model=PanelSlotSchema)
 def update_panel_slot(slot_id: int, slot_update: PanelSlotUpdate, db: Session = Depends(get_db)):
     """Update a panel slot with a device"""
@@ -37,12 +81,54 @@ def update_panel_slot(slot_id: int, slot_update: PanelSlotUpdate, db: Session = 
     if not db_slot:
         raise HTTPException(status_code=404, detail="Panel slot not found")
     
-    # Update slot properties
-    for field, value in slot_update.dict(exclude_unset=True).items():
-        setattr(db_slot, field, value)
-    
-    # Update occupation status
-    db_slot.is_occupied = db_slot.device_type_id is not None
+    # If placing a device, check if it can be placed
+    if slot_update.device_type_id is not None:
+        # Get device type to check slot requirements
+        device_type = db.query(DeviceType).filter(DeviceType.id == slot_update.device_type_id).first()
+        if not device_type:
+            raise HTTPException(status_code=404, detail="Device type not found")
+        
+        # Check if enough consecutive slots are available
+        if not can_place_device_at_slot(db, slot_id, slot_update.device_type_id):
+            raise HTTPException(status_code=400, detail="Cannot place device at this slot - not enough consecutive free slots")
+        
+        # Remove any existing device from this slot first (clean up any multi-slot device)
+        remove_device_from_slot(slot_id, db)
+        
+        # Update the primary slot with device information
+        for field, value in slot_update.dict(exclude_unset=True).items():
+            if hasattr(db_slot, field):
+                setattr(db_slot, field, value)
+        
+        db_slot.is_occupied = True
+        db_slot.spans_slots = device_type.slots_required
+        
+        # If device spans multiple slots, mark additional slots as occupied
+        if device_type.slots_required > 1:
+            # Get all slots in the same row
+            panel_slots = db.query(PanelSlot).filter(
+                PanelSlot.panel_id == db_slot.panel_id,
+                PanelSlot.row == db_slot.row
+            ).order_by(PanelSlot.column).all()
+            
+            # Find starting slot index
+            slot_index = None
+            for i, s in enumerate(panel_slots):
+                if s.id == slot_id:
+                    slot_index = i
+                    break
+            
+            if slot_index is not None:
+                # Mark additional slots as occupied (but not configured)
+                for i in range(slot_index + 1, min(slot_index + device_type.slots_required, len(panel_slots))):
+                    additional_slot = panel_slots[i]
+                    additional_slot.is_occupied = True
+                    additional_slot.device_type_id = None  # Only the primary slot has the device reference
+                    additional_slot.spans_slots = 0  # Indicate this is a secondary slot
+        
+    else:
+        # Just removing a device
+        remove_device_from_slot(slot_id, db)
     
     db.commit()
     db.refresh(db_slot)
@@ -50,19 +136,70 @@ def update_panel_slot(slot_id: int, slot_update: PanelSlotUpdate, db: Session = 
 
 @router.delete("/slots/{slot_id}/device")
 def remove_device_from_slot(slot_id: int, db: Session = Depends(get_db)):
-    """Remove device from a panel slot"""
+    """Remove device from a panel slot and free up all spanned slots"""
     db_slot = db.query(PanelSlot).filter(PanelSlot.id == slot_id).first()
     if not db_slot:
         raise HTTPException(status_code=404, detail="Panel slot not found")
     
-    db_slot.device_type_id = None
-    db_slot.device_label = None
-    db_slot.current_setting = None
-    db_slot.is_occupied = False
-    db_slot.spans_slots = 1
+    # If this slot spans multiple slots, we need to free them all
+    if db_slot.is_occupied and db_slot.spans_slots > 1:
+        # Get all slots in the same row
+        panel_slots = db.query(PanelSlot).filter(
+            PanelSlot.panel_id == db_slot.panel_id,
+            PanelSlot.row == db_slot.row
+        ).order_by(PanelSlot.column).all()
+        
+        # Find starting slot index
+        slot_index = None
+        for i, s in enumerate(panel_slots):
+            if s.id == slot_id:
+                slot_index = i
+                break
+        
+        if slot_index is not None:
+            # Clear all spanned slots
+            for i in range(slot_index, min(slot_index + db_slot.spans_slots, len(panel_slots))):
+                slot_to_clear = panel_slots[i]
+                slot_to_clear.device_type_id = None
+                slot_to_clear.device_label = None
+                slot_to_clear.current_setting = None
+                slot_to_clear.is_occupied = False
+                slot_to_clear.spans_slots = 1
+    else:
+        # Single slot device or already cleared
+        db_slot.device_type_id = None
+        db_slot.device_label = None
+        db_slot.current_setting = None
+        db_slot.is_occupied = False
+        db_slot.spans_slots = 1
     
     db.commit()
     return {"message": "Device removed from slot"}
+
+@router.get("/slots/{slot_id}/can-place/{device_type_id}")
+def check_device_placement(slot_id: int, device_type_id: int, db: Session = Depends(get_db)):
+    """Check if a device can be placed at a specific slot"""
+    can_place = can_place_device_at_slot(db, slot_id, device_type_id)
+    
+    # Get additional info for debugging
+    slot = db.query(PanelSlot).filter(PanelSlot.id == slot_id).first()
+    device_type = db.query(DeviceType).filter(DeviceType.id == device_type_id).first()
+    
+    return {
+        "can_place": can_place,
+        "slot_info": {
+            "id": slot.id if slot else None,
+            "row": slot.row if slot else None,
+            "column": slot.column if slot else None,
+            "is_occupied": slot.is_occupied if slot else None,
+            "spans_slots": slot.spans_slots if slot else None
+        },
+        "device_info": {
+            "id": device_type.id if device_type else None,
+            "name": device_type.name if device_type else None,
+            "slots_required": device_type.slots_required if device_type else None
+        }
+    }
 
 @router.get("/library/hager")
 def get_hager_device_library():

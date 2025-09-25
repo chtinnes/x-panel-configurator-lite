@@ -1,4 +1,4 @@
-from pydantic import BaseModel
+from pydantic import BaseModel, computed_field
 from typing import Optional, List
 from datetime import datetime
 
@@ -7,12 +7,16 @@ class PanelBase(BaseModel):
     name: str
     model: str
     manufacturer: str = "Hager"
-    total_slots: int
     rows: int = 2
     slots_per_row: int
     voltage: float
     current_rating: float
     description: Optional[str] = None
+    
+    @computed_field
+    @property
+    def total_slots(self) -> int:
+        return self.rows * self.slots_per_row
 
 class PanelCreate(PanelBase):
     pass
@@ -21,7 +25,6 @@ class PanelUpdate(BaseModel):
     name: Optional[str] = None
     model: Optional[str] = None
     manufacturer: Optional[str] = None
-    total_slots: Optional[int] = None
     rows: Optional[int] = None
     slots_per_row: Optional[int] = None
     voltage: Optional[float] = None

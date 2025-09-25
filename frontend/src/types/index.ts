@@ -3,9 +3,9 @@ export interface Panel {
   name: string;
   model: string;
   manufacturer: string;
-  total_slots: number;
   rows: number;
   slots_per_row: number;
+  total_slots: number; // Computed from rows * slots_per_row
   voltage: number;
   current_rating: number;
   description?: string;
@@ -18,7 +18,6 @@ export interface PanelCreate {
   name: string;
   model: string;
   manufacturer: string;
-  total_slots: number;
   rows: number;
   slots_per_row: number;
   voltage: number;
@@ -97,7 +96,6 @@ export interface PanelTemplate {
   name: string;
   model: string;
   manufacturer: string;
-  total_slots: number;
   rows: number;
   slots_per_row: number;
   voltage: number;

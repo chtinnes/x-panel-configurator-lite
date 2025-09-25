@@ -30,6 +30,10 @@ function App() {
     setSelectedPanel(panel);
   };
 
+  const handlePanelUpdate = (updatedPanel: Panel) => {
+    setSelectedPanel(updatedPanel);
+  };
+
   const handleViewChange = (view: 'panel' | 'wiring') => {
     setCurrentView(view);
   };
@@ -104,7 +108,7 @@ function App() {
                 {selectedPanel.manufacturer} {selectedPanel.model} - {selectedPanel.total_slots} slots ({selectedPanel.rows} rows × {selectedPanel.slots_per_row} slots), {selectedPanel.voltage}V, {selectedPanel.current_rating}A
               </Typography>
               
-              {currentView === 'panel' && <PanelView panel={selectedPanel} />}
+              {currentView === 'panel' && <PanelView panel={selectedPanel} onPanelUpdate={handlePanelUpdate} />}
               {currentView === 'wiring' && <WiringView panel={selectedPanel} />}
             </>
           ) : (

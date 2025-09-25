@@ -24,6 +24,8 @@ export const deviceAPI = {
   updatePanelSlot: (slotId: number, slot: any) => api.put(`/devices/slots/${slotId}`, slot),
   removeDeviceFromSlot: (slotId: number) => api.delete(`/devices/slots/${slotId}/device`),
   getHagerDeviceLibrary: () => api.get('/devices/library/hager'),
+  canPlaceDevice: (slotId: number, deviceTypeId: number) => 
+    api.get(`/devices/slots/${slotId}/can-place/${deviceTypeId}`),
 };
 
 // Wiring API

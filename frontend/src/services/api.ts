@@ -1,10 +1,46 @@
 import axios from 'axios';
 
-const API_BASE_URL = 'http://localhost:8000/api';
+// Use environment variable if available, otherwise fall back to development defaults
+const API_BASE_URL = process.env.REACT_APP_API_BASE_URL || 'http://localhost:8000/api';
 
 const api = axios.create({
   baseURL: API_BASE_URL,
+  // For development with self-signed certificates
+  timeout: 10000,
+  // Add headers to help with CORS and HTTPS
+  headers: {
+    'Content-Type': 'application/json',
+  },
 });
+
+// Add request interceptor to handle HTTPS development issues
+api.interceptors.request.use(
+  (config) => {
+    // In development, if we're using HTTPS localhost, add special handling
+    if (process.env.NODE_ENV === 'development' && config.baseURL?.includes('https://localhost')) {
+      // For browser environments, we can't disable SSL verification directly
+      // But we can add headers that might help with self-signed certificates
+      config.headers.set('Accept', 'application/json');
+    }
+    return config;
+  },
+  (error) => Promise.reject(error)
+);
+
+// Add response interceptor to handle SSL/certificate errors gracefully
+api.interceptors.response.use(
+  (response) => response,
+  (error) => {
+    if (error.code === 'ERR_CERT_AUTHORITY_INVALID' || 
+        error.code === 'ERR_CERT_COMMON_NAME_INVALID' ||
+        error.message?.includes('certificate') ||
+        error.message?.includes('SSL')) {
+      console.warn('SSL Certificate validation failed. In development, please accept the certificate in your browser by visiting:', API_BASE_URL);
+      console.warn('Navigate to your backend URL directly and accept the certificate, then refresh the page.');
+    }
+    return Promise.reject(error);
+  }
+);
 
 // Template API (new)
 export const templateAPI = {

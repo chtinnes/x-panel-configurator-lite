@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   AppBar,
   Toolbar,
@@ -13,18 +13,31 @@ import {
   ListItemText,
   Divider,
 } from '@mui/material';
+import { BrowserRouter as Router, Routes, Route, useNavigate, useLocation } from 'react-router-dom';
 import { DndProvider } from 'react-dnd';
 import { HTML5Backend } from 'react-dnd-html5-backend';
 import PanelView from './components/PanelView';
 import DeviceLibrary from './components/DeviceLibrary';
 import WiringView from './components/WiringView';
 import PanelSelector from './components/PanelSelector';
+import DigiKeyAdmin from './components/DigiKeyAdmin';
+import DigiKeyOAuthCallback from './components/DigiKeyOAuthCallback';
+import SSLCertificateHelper from './components/SSLCertificateHelper';
 import { Panel } from './types';
 import './App.css';
 
-function App() {
+function AppContent() {
   const [selectedPanel, setSelectedPanel] = useState<Panel | null>(null);
-  const [currentView, setCurrentView] = useState<'panel' | 'wiring'>('panel');
+  const [currentView, setCurrentView] = useState<'panel' | 'wiring' | 'admin'>('panel');
+  const navigate = useNavigate();
+  const location = useLocation();
+
+  useEffect(() => {
+    // Check if we're on the admin route and switch view accordingly
+    if (location.pathname === '/admin') {
+      setCurrentView('admin');
+    }
+  }, [location]);
 
   const handlePanelSelect = (panel: Panel) => {
     setSelectedPanel(panel);
@@ -34,20 +47,26 @@ function App() {
     setSelectedPanel(updatedPanel);
   };
 
-  const handleViewChange = (view: 'panel' | 'wiring') => {
+  const handleViewChange = (view: 'panel' | 'wiring' | 'admin') => {
     setCurrentView(view);
+    if (view === 'admin') {
+      navigate('/admin');
+    } else {
+      navigate('/');
+    }
   };
 
   return (
-    <DndProvider backend={HTML5Backend}>
-      <Box sx={{ display: 'flex' }}>
-        <AppBar position="fixed" sx={{ zIndex: (theme) => theme.zIndex.drawer + 1 }}>
-          <Toolbar>
-            <Typography variant="h6" noWrap component="div">
-              Electrical Panel Configurator
-            </Typography>
-          </Toolbar>
-        </AppBar>
+    <SSLCertificateHelper>
+      <DndProvider backend={HTML5Backend}>
+        <Box sx={{ display: 'flex' }}>
+          <AppBar position="fixed" sx={{ zIndex: (theme) => theme.zIndex.drawer + 1 }}>
+            <Toolbar>
+              <Typography variant="h6" noWrap component="div">
+                Electrical Panel Configurator
+              </Typography>
+            </Toolbar>
+          </AppBar>
         
         <Drawer
           variant="permanent"
@@ -86,6 +105,14 @@ function App() {
                   <ListItemText primary="Wiring Configuration" />
                 </ListItemButton>
               </ListItem>
+              <ListItem disablePadding>
+                <ListItemButton
+                  selected={currentView === 'admin'}
+                  onClick={() => handleViewChange('admin')}
+                >
+                  <ListItemText primary="DigiKey Admin" />
+                </ListItemButton>
+              </ListItem>
             </List>
             
             <Divider sx={{ my: 2 }} />
@@ -99,7 +126,14 @@ function App() {
 
         <Box component="main" sx={{ flexGrow: 1, p: 3 }}>
           <Toolbar />
-          {selectedPanel ? (
+          {currentView === 'admin' ? (
+            <>
+              <Typography variant="h4" gutterBottom>
+                DigiKey Administration
+              </Typography>
+              <DigiKeyAdmin />
+            </>
+          ) : selectedPanel ? (
             <>
               <Typography variant="h4" gutterBottom>
                 {selectedPanel.name}
@@ -138,6 +172,19 @@ function App() {
         </Box>
       </Box>
     </DndProvider>
+    </SSLCertificateHelper>
+  );
+}
+
+function App() {
+  return (
+    <Router>
+      <Routes>
+        <Route path="/template-sync/callback" element={<DigiKeyOAuthCallback />} />
+        <Route path="/admin" element={<AppContent />} />
+        <Route path="/" element={<AppContent />} />
+      </Routes>
+    </Router>
   );
 }
 
